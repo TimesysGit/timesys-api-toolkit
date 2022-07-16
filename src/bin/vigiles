@@ -1,0 +1,398 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2022 Timesys Corporation
+# SPDX-License-Identifier: MIT
+
+import argparse
+import logging
+import os
+from pathlib import Path
+from pprint import pprint
+import sys
+
+from timesys import (
+    llapi,
+    logger,
+    utilities,
+    vigiles,
+)
+
+
+def configure_logger(logger, level=logging.INFO, format="%(asctime)s : %(name)s : %(levelname)s : %(message)s"):
+    """Configure and add a handler to the given logger
+
+    Log level can also be overriden by the "LOG_LEVEL" environment variable.
+    """
+    env_level = os.getenv('LOG_LEVEL')
+    if env_level:
+        level = env_level
+
+    handler = logging.StreamHandler()
+    handler.setLevel(level)
+    formatter = logging.Formatter(format)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+
+def process_args(argv=None):
+    parser = argparse.ArgumentParser(description='Vigiles tool using Timesys LinuxLink APIs')
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Script Options
+    # ==============
+
+    # dry run only prints a dictionary of the request that would be sent to the server, and includes an extra 'hmac_msg' key
+    # to debug and help authors of their own tools match the auth token format
+    parser.add_argument(
+        "--dry-run",
+        help="Do not send a request to the server, return a dictionary representing the request contents instead",
+        action="store_true",
+        dest="dry_run",
+    )
+
+    # the base url for requests
+    parser.add_argument(
+        "-u", "--url",
+        help="Base URL for all requests. Default is: https://linuxlink.timesys.com",
+        dest="url",
+    )
+
+    # Skip SSL certificate check (not recommended)
+    parser.add_argument(
+        "-i", "--insecure",
+        help="Do not check server certificates",
+        action="store_false",
+        dest="verify_cert",
+    )
+
+    # key file path
+    parser.add_argument(
+        "-k", "--key-file",
+        help="Path to LinuxLink Key File (default: ~/timesys/linuxlink_key)",
+        dest="key_file",
+    )
+
+    # dashboard config path
+    parser.add_argument(
+        "-d", "--dash-config",
+        help="Path to Dashboard Config file containing Product/Folder tokens. If not configured, the default 'Private Workspace' will be used",
+        dest="dash_config",
+    )
+
+    # disable formatted output (pretty print)
+    parser.add_argument(
+        "-f", "--no-format",
+        help="Do not prettyprint command results",
+        action="store_true",
+        dest="no_format",
+    )
+
+    # Commands - Utilities
+    # ====================
+    subparsers.add_parser(
+        "heartbeat",
+        aliases=['heartbeat', 'test'],
+        help="Verify Key File and server availability",
+    )
+
+    # Commands - Manifests
+    # ====================
+    parser_manifest = subparsers.add_parser("manifest", help="Commands related to manifests and manifest tokens")
+    subparser_manifest = parser_manifest.add_subparsers(dest="manifest_command", help='Which manifest command to execute', required=True)
+
+    # get list of manifest tokens
+    subparser_manifest.add_parser("list", help="Get list of tokens of all manifests available for a user. If a Dashboard Config is used, results will be limited to the appropriate Product/Folder")
+
+    # manifest get info (with metadata)
+    parser_get_manifest_info = subparser_manifest.add_parser("info",  help="Get manifest data with added metadata")
+    parser_get_manifest_info.add_argument("manifest_token", metavar="manifest-token", help="Token of the Manifest to retrieve")
+    parser_get_manifest_info.add_argument("-f", "--sbom-format", dest="sbom_format", help="Convert the manifest to another format before returning it", choices=["spdx"])
+
+    # manifest get file (just bytes)
+    parser_get_manifest_file = subparser_manifest.add_parser("download", help="Get manifest data in bytes to write to a file")
+    parser_get_manifest_file.add_argument("manifest_token", metavar="manifest-token", help="Token of the Manifest to retrieve")
+    parser_get_manifest_file.add_argument("-f", "--sbom-format", dest="sbom_format", help="Convert the manifest to another format before returning it", choices=["spdx"])
+    manifest_download_group = parser_get_manifest_file.add_mutually_exclusive_group(required=True)
+    manifest_download_group.add_argument("-o", "--outfile", dest="outfile", help="Path to output file. Existing files will be overwritten!")
+    manifest_download_group.add_argument("--stdout", dest="stdout", action="store_true", help="Write downloaded bytes to stdout")
+
+    # upload manifest
+    parser_upload_manifest = subparser_manifest.add_parser("upload", help="Upload a manifest file. Use a Dashboard Config file to specify destination Product or Folder. Default is 'Private Workspace' Product")
+    parser_upload_manifest.add_argument("manifest", action='store', help='Path to a manifest file')
+    parser_upload_manifest.add_argument('-k', '--kernel-config', '--kconfig', dest="kernel_config", help="Path to a kernel config file. With sufficient user permissions, it will be used to filter results that are not relevant. Must be a full config, not a defconfig")
+    parser_upload_manifest.add_argument('-n', '--manifest-name', dest="manifest_name", help="Custom name for Manifest")
+    parser_upload_manifest.add_argument('-u', '--uboot-config', dest="uboot_config", help='Path to a u-boot config file. With sufficient user permissions, it will be used to filter results that are not relevant. Must be a full config, not a defconfig')
+    parser_upload_manifest.add_argument('-s', '--subfolder-name', dest='subfolder_name', help='If a Dashboard Config is used, this option will create a subfolder in that location with the given name, and upload the manifest there')
+    parser_upload_manifest.add_argument('-o', '--upload-only', action='store_true', dest='upload_only', help='Upload manifest but do not generate a report')
+    parser_upload_manifest.add_argument('-f', '--filter-results', action='store_true', default=False, dest='filter_results', help='Apply all filters to resulting report (only config filters applied if omitted)')
+    parser_upload_manifest.add_argument('-e', '--extra-fields', dest='extra_fields', help='Comma separated list of extra CVE attributes to include if results are returned. Acceptable values are: "assigner", "description", "impact", "modified", "problem_types", "published", "references"', type=lambda fields: [f.strip() for f in fields.split(',')])
+
+    # manifest delete
+    parser_manifest_delete = subparser_manifest.add_parser("delete", help="Delete a manifest with a given token. This can NOT be undone!")
+    parser_manifest_delete.add_argument('manifest_token', metavar="manifest-token", help='Token of the manifest to delete')
+    parser_manifest_delete.add_argument('-c', '--confirm', default=False, action='store_true', dest='confirmed', help="Confirm deletion of manifest", required=True)
+
+    # manifest rescan
+    parser_manifest_rescan = subparser_manifest.add_parser("rescan", help="Generate a new CVE report for a given manifest_token")
+    parser_manifest_rescan.add_argument('manifest_token', metavar="manifest-token", help='Token of the manifest to rescan')
+    parser_manifest_rescan.add_argument('-e', '--extra-fields', dest='extra_fields', help='Comma separated list of extra CVE attributes to include if results are returned. Acceptable values are: "assigner", "description", "impact", "modified", "problem_types", "published", "references"', type=lambda fields: [f.strip() for f in fields.split(',')])
+    parser_manifest_rescan.add_argument('-f', '--filter-results', action='store_true', default=False, dest='filter_results', help='Apply all filters to report (only config filters applied if ommitted)')
+    parser_manifest_rescan.add_argument('-o', '--rescan-only', action='store_true', dest='rescan_only', help='Rescan the manifest but do not return the report data')
+
+    # manifest latest-report
+    parser_manifest_latest = subparser_manifest.add_parser("latest-report", help="Get the most recent report for a manifest with a given token")
+    parser_manifest_latest.add_argument('manifest_token', metavar="manifest-token", help='Token of the manifest')
+    parser_manifest_latest.add_argument('-e', '--extra-fields', dest='extra_fields', help='Comma separated list of extra CVE attributes to include if results are returned. Acceptable values are: "assigner", "description", "impact", "modified", "problem_types", "published", "references"', type=lambda fields: [f.strip() for f in fields.split(',')])
+    parser_manifest_latest.add_argument('-f', '--filter-results', action='store_true', default=False, dest='filter_results', help='Apply all filters to report (only config filters applied if omitted)')
+
+    # get list of available reports
+    parser_get_reports = subparser_manifest.add_parser("reports", help="Get list of reports for a given manifest token")
+    parser_get_reports.add_argument("manifest_token", metavar="manifest-token", help="Token of the Manifest to get a list of reports for")
+
+    # Commands - Reports
+    # ==================
+    parser_reports = subparsers.add_parser("report", help="Commands related to CVE reports and report tokens")
+    subparser_reports = parser_reports.add_subparsers(dest="report_command", help='Which manifest command to execute', required=True)
+
+    # report download (just bytes)
+    parser_report_download = subparser_reports.add_parser("download", help="Get CVE report in a specified file format")
+    parser_report_download.add_argument('file_type', metavar='file-type', help='Filetype for the exported report', choices=["pdf", "pdfsummary", "xlsx", "csv"])
+    parser_report_download.add_argument('report_token', metavar='report-token', help='Token of the report to download')
+    parser_report_download.add_argument('-f', '--filter-results', action='store_true', default=False, dest='filter_results', help='Apply all filters to report (only config filters applied if omitted)')
+    report_download_group = parser_report_download.add_mutually_exclusive_group(required=True)
+    report_download_group.add_argument("-o", "--outfile", dest="outfile", help="Path to output file. Existing files will be overwritten!")
+    report_download_group.add_argument("--stdout", dest="stdout", action="store_true", help="Write downloaded bytes to stdout")
+
+    # compare two reports
+    parser_report_compare = subparser_reports.add_parser("compare", help="Compare two CVE reports with given tokens")
+    parser_report_compare.add_argument('token_one', help='Token of the first report')
+    parser_report_compare.add_argument('token_two', help='Token of the report to compare to the first report')
+    parser_report_compare.add_argument('-r', '--remove_whitelist', action='store_true', dest='remove_whitelist', help='Remove whitelisted CVEs from the comparison')
+    parser_report_compare.add_argument('-f', '--filter_results', action='store_true', default=False, dest='filter_results', help='Apply all filters to reports (only config filters applied if omitted)')
+
+    # Commands - Folder
+    # =================
+    parser_folder = subparsers.add_parser("folder", help="Commands related to folders and folder tokens")
+    subparser_folder = parser_folder.add_subparsers(dest="folder_command", help='Which folder command to execute', required=True)
+
+    # list folders
+    subparser_folder.add_parser("list", help="Get list of tokens of all folders available for a user. If a Dashboard Config is used, results will be limited to the appropriate Product")
+
+    # Commands - Product
+    # ==================
+    parser_product = subparsers.add_parser("product", help="Commands related to products and product tokens")
+    subparser_product = parser_product.add_subparsers(dest="product_command", help='Which product command to execute', required=True)
+
+    # product list
+    subparser_product.add_parser("list", help="Get list of tokens of all products available for a user")
+
+    # product create
+    parser_product_create = subparser_product.add_parser("create", help="Create a new product")
+    parser_product_create.add_argument('product_name', metavar="product-name", help="Name for the new product")
+    parser_product_create.add_argument('-d', '--description', dest='description', help="Optional description for the new product")
+
+    # product info
+    parser_product_info = subparser_product.add_parser("info", help="Get details of a product wit hthe given token")
+    parser_product_info.add_argument('-p', '--product-token', dest='product_token', help="Optional product token for getting info about a different product than the one configured by a Dashboard Config file. If no Dashboard Config is used, this argument must be provided")
+
+    # Commands - CVEs
+    # ===============
+    parser_cves = subparsers.add_parser("cves", help="Commands related to CVEs")
+    subparser_cves = parser_cves.add_subparsers(dest="cves_command", help='Which cves command to execute', required=True)
+
+    # cve search
+    parser_cve_search = subparser_cves.add_parser("search", help="Find CVEs for a specified CPE Product (package name). Returns the IDs and descriptions of matching CVEs")
+    parser_cve_search.add_argument('product', help="CPE Product (package name) to get CVEs for")
+    parser_cve_search.add_argument('-v', '--version', dest='version', default='', help="Version of product to limit results to")
+    parser_cve_search.add_argument('-i', '--ids_only', action='store_true', dest='ids_only', help="Only return a list of CVE IDs, not full info")
+
+    # cve info
+    parser_cve_info = subparser_cves.add_parser("info", help="Get info for a given CVE ID")
+    parser_cve_info.add_argument('cve_id', help="CVE ID to return info for")
+    parser_cve_info.add_argument('-f', '--fields', dest='fields', help='Optionally limit CVE attributes returned to this comma separated list. Acceptable values are: "affected_configurations", "assigned_by", "description", "identifier", "impact", "modified", "problem_types", "published", "references"', type=lambda fields: [f.strip() for f in fields.split(',')])
+
+    # Return parsed commands
+    parsed_args = parser.parse_args()
+    if not parsed_args.command:
+        parser.print_usage()
+        sys.exit(1)
+    return parsed_args
+
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    parsed_args = process_args()
+
+    # Format timesys package logger
+    configure_logger(logger)
+
+    # Read Key File for configuring auth
+    # The default location if not specified on the command line is:
+    # "~/timesys/linuxlink_key"
+    if parsed_args.key_file:
+        key_file_path = Path(parsed_args.key_file)
+    else:
+        key_file_path = Path.home() / "timesys" / "linuxlink_key"
+
+    # Read optional Dashboard Config file
+    if parsed_args.dash_config:
+        dash_config_path = Path(parsed_args.dash_config)
+    else:
+        dash_config_path = None
+
+    # Configure LLAPI object
+    llapi.configure(
+        key_file_path=key_file_path,
+        dashboard_config_path=dash_config_path,
+        verify_cert=parsed_args.verify_cert,
+        url=parsed_args.url,
+        dry_run=parsed_args.dry_run,
+    )
+
+    # Call the corresponding API method for the given command line args
+    try:
+        if parsed_args.command == 'heartbeat':
+            result = utilities.heartbeat()
+        elif parsed_args.command == "manifest":
+            manifest_command = parsed_args.manifest_command
+            if manifest_command == "upload":
+                # read manifest file
+                with Path(parsed_args.manifest).open() as f:
+                    manifest = f.read()
+
+                # read kernel config
+                if parsed_args.kernel_config:
+                    with Path(parsed_args.kernel_config).open() as f:
+                        kconfig = f.read()
+                else:
+                    kconfig = None
+
+                # read uboot config
+                if parsed_args.uboot_config:
+                    with Path(parsed_args.uboot_config).open() as f:
+                        uconfig = f.read()
+                else:
+                    uconfig = None
+
+                result = vigiles.manifests.upload_manifest(
+                    manifest,
+                    kernel_config=kconfig,
+                    uboot_config=uconfig,
+                    manifest_name=parsed_args.manifest_name,
+                    subfolder_name=parsed_args.subfolder_name,
+                    filter_results=parsed_args.filter_results,
+                    extra_fields=parsed_args.extra_fields,
+                    upload_only=parsed_args.upload_only,
+                )
+            elif manifest_command == "list":
+                result = vigiles.manifests.get_manifests()
+            elif manifest_command == "reports":
+                result = vigiles.manifests.get_report_tokens(
+                    parsed_args.manifest_token
+                )
+            elif manifest_command == "info":
+                result = vigiles.manifests.get_manifest_info(
+                    parsed_args.manifest_token,
+                    parsed_args.sbom_format
+                )
+            elif manifest_command == "download":
+                result = vigiles.manifests.get_manifest_file(
+                    parsed_args.manifest_token,
+                    parsed_args.sbom_format
+                )
+
+                if not result.endswith(b'\n'):
+                    result = result + b'\n'
+
+                if parsed_args.stdout:
+                    sys.stdout.buffer.write(result)
+                    sys.stdout.flush()
+                else:
+                    with Path(parsed_args.outfile).open('wb') as f:
+                        f.write(result)
+                sys.exit(0)  # shortcircuit the result printing
+            elif manifest_command == "delete":
+                result = vigiles.manifests.delete_manifest(
+                    parsed_args.manifest_token,
+                    confirmed=parsed_args.confirmed,
+                )
+            elif manifest_command == "rescan":
+                result = vigiles.manifests.rescan_manifest(
+                    parsed_args.manifest_token,
+                    filter_results=parsed_args.filter_results,
+                    extra_fields=parsed_args.extra_fields,
+                    rescan_only=parsed_args.rescan_only,
+                )
+            elif manifest_command == "latest-report":
+                result = vigiles.manifests.get_latest_report(
+                    parsed_args.manifest_token,
+                    filter_results=parsed_args.filter_results,
+                    extra_fields=parsed_args.extra_fields,
+                )
+            else:
+                raise Exception(f'Unhandled manifest command: {parsed_args.manifest_command}')
+        elif parsed_args.command == "report":
+            report_command = parsed_args.report_command
+            if report_command == "download":
+                result = vigiles.reports.download_report(
+                    parsed_args.report_token,
+                    format=parsed_args.file_type,
+                    filter_results=parsed_args.filter_results,
+                )
+
+                if not result.endswith(b'\n'):
+                    result = result + b'\n'
+
+                if parsed_args.stdout:
+                    sys.stdout.buffer.write(result)
+                    sys.stdout.flush()
+                else:
+                    with Path(parsed_args.outfile).open('wb') as f:
+                        f.write(result)
+                sys.exit(0)  # shortcircuit the result printing
+            elif report_command == "compare":
+                result = vigiles.reports.compare_reports(
+                    parsed_args.token_one,
+                    parsed_args.token_two,
+                    filter_results=parsed_args.filter_results,
+                    remove_whitelist=parsed_args.remove_whitelist,
+                )
+        elif parsed_args.command == "folder":
+            folder_command = parsed_args.folder_command
+            if folder_command == "list":
+                result = vigiles.folders.get_folders()
+        elif parsed_args.command == "product":
+            product_command = parsed_args.product_command
+            if product_command == "create":
+                result = vigiles.products.create_product(
+                    parsed_args.product_name,
+                    product_description=parsed_args.description,
+                )
+            elif product_command == "list":
+                result = vigiles.products.get_products()
+            elif product_command == "info":
+                result = vigiles.products.get_product_info(
+                    product_token=parsed_args.product_token,
+                )
+        elif parsed_args.command == "cves":
+            cves_command = parsed_args.cves_command
+            if cves_command == "search":
+                result = vigiles.cves.search_cves_by_product(
+                    parsed_args.product,
+                    version=parsed_args.version,
+                    ids_only=parsed_args.ids_only,
+                )
+            elif cves_command == "info":
+                print(repr(parsed_args.fields))
+                result = vigiles.cves.get_cve_info(
+                    parsed_args.cve_id,
+                    fields=parsed_args.fields,
+                )
+        else:
+            raise Exception(f'Unhandled command: {parsed_args.command}')
+    except Exception as err:
+        print(err)
+    else:  # command returned normally
+        if parsed_args.no_format:
+            print(result)
+        else:
+            pprint(result)
