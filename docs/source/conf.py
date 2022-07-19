@@ -12,8 +12,8 @@
 #
 import os
 import sys
-import sphinx_rtd_theme
-sys.path.insert(0, os.path.abspath('../../src'))
+#import sphinx_rtd_theme
+sys.path.insert(0, os.path.abspath('../../src/lib'))
 
 
 # -- Project information -----------------------------------------------------
@@ -64,6 +64,8 @@ html_theme = 'sphinx_rtd_theme'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
+# Do not include the rst files with the output
+html_copy_source = False
 
 # -- Extension configuration -------------------------------------------------
 
