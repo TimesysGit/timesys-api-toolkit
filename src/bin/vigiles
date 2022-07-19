@@ -259,7 +259,7 @@ if __name__ == '__main__':
         if parsed_args.command == 'version':
             print(llapi.version)
             sys.exit(0)
-        elif parsed_args.command == 'heartbeat':
+        elif parsed_args.command in ['heartbeat', 'test']:
             result = utilities.heartbeat()
         elif parsed_args.command == "manifest":
             manifest_command = parsed_args.manifest_command
