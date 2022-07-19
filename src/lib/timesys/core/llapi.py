@@ -5,12 +5,14 @@ from collections.abc import Sequence
 import hashlib
 import hmac
 import json
+import logging
 import requests
 import urllib.parse
 import urllib3
 import warnings
 
-import logging
+import timesys
+
 
 class LLAPI:
     """Interface for configuration and LinuxLink communication
@@ -103,6 +105,10 @@ class LLAPI:
         self.dry_run = None
 
         self.configure(key_file_path=key_file_path, dashboard_config_path=dashboard_config_path, url=url, verify_cert=verify_cert, dry_run=dry_run, log_level=log_level)
+
+    @property
+    def version(self):
+        return timesys.__version__
 
     @property
     def current_config(self):

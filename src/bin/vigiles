@@ -89,6 +89,11 @@ def process_args(argv=None):
     # Commands - Utilities
     # ====================
     subparsers.add_parser(
+        "version",
+        help="Print version and exit",
+    )
+
+    subparsers.add_parser(
         "heartbeat",
         aliases=['heartbeat', 'test'],
         help="Verify Key File and server availability",
@@ -250,7 +255,11 @@ if __name__ == '__main__':
 
     # Call the corresponding API method for the given command line args
     try:
-        if parsed_args.command == 'heartbeat':
+
+        if parsed_args.command == 'version':
+            print(llapi.version)
+            sys.exit(0)
+        elif parsed_args.command == 'heartbeat':
             result = utilities.heartbeat()
         elif parsed_args.command == "manifest":
             manifest_command = parsed_args.manifest_command
