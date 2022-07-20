@@ -4,6 +4,10 @@ This project contains a Python package and a command-line tool for
 interacting with APIs for Timesys services such as
 [Vigiles](https://www.timesys.com/solutions/vigiles-vulnerability-management/).
 
+Documentation generated from this repository is hosted at https://linuxlink.timesys.com/docs/api-toolkit
+
+The server-side API endpoint documentation for Vigiles is here: https://linuxlink.timesys.com/docs/vigiles-api-manual
+
 ### Install
 
 From this repository, you can install with pip:
@@ -19,6 +23,7 @@ pip3 install .[docs]
 ```
 
 ### Setup
+
 Usage of the APIs requires a [Key
 file](https://linuxlink.timesys.com/docs/wiki/engineering/LinuxLink_Key_File)
 for authentication. The key file contains the user's email address and
@@ -31,6 +36,8 @@ documentation. Dashboard Config files are downloaded from Product pages
 on the [Vigiles Dashboard](https://linuxlink.timesys.com/vigiles/) and
 passed to the core LLAPI object's `configure` method. Product and
 Folder tokens may also be set directly on that object without a file.
+
+Most features of the API require a [Vigiles Prime subscription](https://www.timesys.com/solutions/vigiles-vulnerability-management/options/).
 
 ### Getting Started
 
