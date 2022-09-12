@@ -391,7 +391,6 @@ if __name__ == '__main__':
                     ids_only=parsed_args.ids_only,
                 )
             elif cves_command == "info":
-                print(repr(parsed_args.fields))
                 result = vigiles.cves.get_cve_info(
                     parsed_args.cve_id,
                     fields=parsed_args.fields,
