@@ -213,7 +213,7 @@ def process_args(argv=None):
     # cve info
     parser_cve_info = subparser_cves.add_parser("info", help="Get info for a given CVE ID")
     parser_cve_info.add_argument('cve_id', help="CVE ID to return info for")
-    parser_cve_info.add_argument('-f', '--fields', dest='fields', help='Optionally limit CVE attributes returned to this comma separated list. Acceptable values are: "affected_configurations", "assigned_by", "description", "identifier", "impact", "modified", "problem_types", "published", "references"', type=lambda fields: [f.strip() for f in fields.split(',')])
+    parser_cve_info.add_argument('-f', '--fields', dest='fields', help='Optionally limit CVE attributes returned to this comma separated list. Acceptable values are: "affected_configurations", "assigner", "description", "identifier", "impact", "modified", "problem_types", "published", "references"', type=lambda fields: [f.strip() for f in fields.split(',')])
 
     # Return parsed commands
     parsed_args = parser.parse_args()
