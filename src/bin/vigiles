@@ -74,7 +74,7 @@ def process_args(argv=None):
     # dashboard config path
     parser.add_argument(
         "-d", "--dash-config",
-        help="Path to Dashboard Config file containing Product/Folder tokens. If not configured, the default 'Private Workspace' will be used",
+        help="Path to Dashboard Config file containing Group/Folder tokens. If not configured, the default 'Private Workspace' will be used",
         dest="dash_config",
     )
 
@@ -105,7 +105,7 @@ def process_args(argv=None):
     subparser_manifest = parser_manifest.add_subparsers(dest="manifest_command", help='Which manifest command to execute', required=True)
 
     # get list of manifest tokens
-    subparser_manifest.add_parser("list", help="Get list of tokens of all manifests available for a user. If a Dashboard Config is used, results will be limited to the appropriate Product/Folder")
+    subparser_manifest.add_parser("list", help="Get list of tokens of all manifests available for a user. If a Dashboard Config is used, results will be limited to the appropriate Group/Folder")
 
     # manifest get info (with metadata)
     parser_get_manifest_info = subparser_manifest.add_parser("info",  help="Get manifest data with added metadata")
@@ -121,7 +121,7 @@ def process_args(argv=None):
     manifest_download_group.add_argument("--stdout", dest="stdout", action="store_true", help="Write downloaded bytes to stdout")
 
     # upload manifest
-    parser_upload_manifest = subparser_manifest.add_parser("upload", help="Upload a manifest file. Use a Dashboard Config file to specify destination Product or Folder. Default is 'Private Workspace' Product")
+    parser_upload_manifest = subparser_manifest.add_parser("upload", help="Upload a manifest file. Use a Dashboard Config file to specify destination Group or Folder. Default is 'Private Workspace' Group")
     parser_upload_manifest.add_argument("manifest", action='store', help='Path to a manifest file')
     parser_upload_manifest.add_argument('-k', '--kernel-config', '--kconfig', dest="kernel_config", help="Path to a kernel config file. With sufficient user permissions, it will be used to filter results that are not relevant. Must be a full config, not a defconfig")
     parser_upload_manifest.add_argument('-n', '--manifest-name', dest="manifest_name", help="Custom name for Manifest")
@@ -134,7 +134,7 @@ def process_args(argv=None):
     # manifest delete
     parser_manifest_delete = subparser_manifest.add_parser("delete", help="Delete a manifest with a given token. This can NOT be undone!")
     parser_manifest_delete.add_argument('manifest_token', metavar="manifest-token", help='Token of the manifest to delete')
-    parser_manifest_delete.add_argument('-c', '--confirm', default=False, action='store_true', dest='confirmed', help="Confirm deletion of manifest", required=True)
+    parser_manifest_delete.add_argument('-c', '--confirm', default=False, action='store_true', dest='confirmed', help="Confirm deletion of manifest")
 
     # manifest rescan
     parser_manifest_rescan = subparser_manifest.add_parser("rescan", help="Generate a new CVE report for a given manifest_token")
@@ -180,24 +180,27 @@ def process_args(argv=None):
     subparser_folder = parser_folder.add_subparsers(dest="folder_command", help='Which folder command to execute', required=True)
 
     # list folders
-    subparser_folder.add_parser("list", help="Get list of tokens of all folders available for a user. If a Dashboard Config is used, results will be limited to the appropriate Product")
+    parser_folder_list = subparser_folder.add_parser("list", help="Get list of tokens of all folders available for a user. If a Dashboard Config is used, results will be limited to the appropriate Group")
+    parser_folder_list.add_argument('-g', '--group_token', dest="group_token")
 
-    # Commands - Product
+    # Commands - Group
     # ==================
-    parser_product = subparsers.add_parser("product", help="Commands related to products and product tokens")
-    subparser_product = parser_product.add_subparsers(dest="product_command", help='Which product command to execute', required=True)
+    parser_group = subparsers.add_parser("group", help="Commands related to groups and group tokens")
+    subparser_group = parser_group.add_subparsers(dest="group_command", help='Which group command to execute', required=True)
 
-    # product list
-    subparser_product.add_parser("list", help="Get list of tokens of all products available for a user")
+    # group list
+    subparser_group.add_parser("list", help="Get a list of tokens for all of the groups available to a user")
 
-    # product create
-    parser_product_create = subparser_product.add_parser("create", help="Create a new product")
-    parser_product_create.add_argument('product_name', metavar="product-name", help="Name for the new product")
-    parser_product_create.add_argument('-d', '--description', dest='description', help="Optional description for the new product")
+    # group create
+    parser_group_create = subparser_group.add_parser("create", help="Create a new group")
+    parser_group_create.add_argument('group_name', metavar="group-name", help="Name for the new group")
+    parser_group_create.add_argument('-d', '--description', dest='description', help="Optional description for the new group")
+    parser_group_create.add_argument('-g', '--group-token', dest="group_token", help="Optional parent group token to create a subgroup")
 
-    # product info
-    parser_product_info = subparser_product.add_parser("info", help="Get details of a product wit hthe given token")
-    parser_product_info.add_argument('-p', '--product-token', dest='product_token', help="Optional product token for getting info about a different product than the one configured by a Dashboard Config file. If no Dashboard Config is used, this argument must be provided")
+    # group info
+    parser_group_info = subparser_group.add_parser("info", help="Get details about the group for the given token")
+    parser_group_info.add_argument('-g', '--group-token', dest='group_token', help="Optional group token for getting info about a different group than the one configured by a Dashboard Config file. If no Dashboard Config is used, this argument must be provided")
+    parser_group_info.add_argument('-s', '--subgroups', action='store_true', default=False, dest='subgroups', help='Optional parameter to include subgroup details')
 
     # Commands - CVEs
     # ===============
@@ -368,19 +371,21 @@ if __name__ == '__main__':
         elif parsed_args.command == "folder":
             folder_command = parsed_args.folder_command
             if folder_command == "list":
-                result = vigiles.folders.get_folders()
-        elif parsed_args.command == "product":
-            product_command = parsed_args.product_command
-            if product_command == "create":
-                result = vigiles.products.create_product(
-                    parsed_args.product_name,
-                    product_description=parsed_args.description,
+                result = vigiles.folders.get_folders(parsed_args.group_token)
+        elif parsed_args.command == "group":
+            group_command = parsed_args.group_command
+            if group_command == "create":
+                result = vigiles.groups.create_group(
+                    parsed_args.group_name,
+                    group_description=parsed_args.description,
+                    group_token=parsed_args.group_token,
                 )
-            elif product_command == "list":
-                result = vigiles.products.get_products()
-            elif product_command == "info":
-                result = vigiles.products.get_product_info(
-                    product_token=parsed_args.product_token,
+            elif group_command == "list":
+                result = vigiles.groups.get_groups()
+            elif group_command == "info":
+                result = vigiles.groups.get_group_info(
+                    group_token=parsed_args.group_token,
+                    subgroups=parsed_args.subgroups,
                 )
         elif parsed_args.command == "cves":
             cves_command = parsed_args.cves_command

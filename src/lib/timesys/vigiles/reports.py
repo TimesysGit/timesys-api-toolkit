@@ -5,7 +5,9 @@ import timesys
 
 
 def download_report(report_token, format=None, filter_results=False):
-    """Get a CVE report as a file from the given report token
+    """**Access to this route requires a Vigiles prime subscription.**
+
+    Get a CVE report as a file from the given report token
 
     Parameters
     ----------
@@ -14,7 +16,7 @@ def download_report(report_token, format=None, filter_results=False):
 
     format : str
         What file format to return from the following:
-            "csv", "pdf", "pdfsummary", "xlsx"
+        "csv", "pdf", "pdfsummary", "xlsx"
 
     filter_results : bool
         True to apply all configured filters to scan results,
@@ -47,7 +49,10 @@ def download_report(report_token, format=None, filter_results=False):
 
 
 def compare_reports(token_one, token_two, remove_whitelist=False, filter_results=False):
-    """Get comparison between report token_one and report token_two
+    """**Access to this route requires a Vigiles prime subscription.**
+
+    Get comparison between report token_one and report token_two
+
 
     Arguments
     ---------

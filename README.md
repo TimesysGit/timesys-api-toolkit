@@ -29,12 +29,12 @@ file](https://linuxlink.timesys.com/docs/wiki/engineering/LinuxLink_Key_File)
 for authentication. The key file contains the user's email address and
 API key.
 
-For configuring the Vigiles subpackage to use specific Product or Folder
+For configuring the Vigiles subpackage to use specific Group or Folder
 locations, refer to the [Dashboard
 Config](https://linuxlink.timesys.com/docs/vigiles-vulnerability-monitoring-and-management-user-guide#Dashboard-config)
-documentation. Dashboard Config files are downloaded from Product pages
+documentation. Dashboard Config files are downloaded from Group pages
 on the [Vigiles Dashboard](https://linuxlink.timesys.com/vigiles/) and
-passed to the core LLAPI object's `configure` method. Product and
+passed to the core LLAPI object's `configure` method. Group and
 Folder tokens may also be set directly on that object without a file.
 
 Most features of the API require a [Vigiles Prime subscription](https://www.timesys.com/solutions/vigiles-vulnerability-management/options/).

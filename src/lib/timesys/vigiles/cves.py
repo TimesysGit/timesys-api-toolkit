@@ -5,7 +5,9 @@ import timesys
 
 
 def get_cve_info(cve_id, fields=None):
-    """Get CVE info by CVE ID
+    """**Access to this route requires a Vigiles prime subscription.**
+
+    Get CVE info by CVE ID
 
     Parameters
     ----------
@@ -13,13 +15,14 @@ def get_cve_info(cve_id, fields=None):
         A valid CVE ID
     fields: list of str, optional
         Limit cve data returned to given the fields. If none are specified, all are returned.
+
         Valid fields:
             "affected_configurations", "assigner", "description", "identifier", "impact", "modified", "problem_types", "published", "references"
 
     Returns
     -------
     dict
-         CVE data, optionally filtered to the requested fields
+        CVE data, optionally filtered to the requested fields
     """
     if not cve_id:
         raise Exception("cve_id is required")
@@ -33,10 +36,12 @@ def get_cve_info(cve_id, fields=None):
 
 
 def search_cves_by_product(cpe_product, version="", ids_only=False):
-    """Get CVEs which affect given CPE Product and optionally filter by version
+    """**Access to this route requires a Vigiles prime subscription.**
+
+    Get CVEs which affect given CPE Product and optionally filter by version
 
     Parameters
-    ---------
+    ----------
     product : str
         CPE Product (package_name) to search CVEs for
     version : str, optional

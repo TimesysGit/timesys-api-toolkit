@@ -5,6 +5,6 @@ from timesys.vigiles import (
     cves,
     folders,
     manifests,
-    products,
+    groups,
     reports,
 )
