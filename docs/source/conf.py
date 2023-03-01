@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath('../../src/lib'))
 # -- Project information -----------------------------------------------------
 
 project = 'Timesys API Toolkit'
-copyright = '2022, Timesys Corporation'
+copyright = '2023, Timesys Corporation'
 author = 'Timesys Corporation'
 
 

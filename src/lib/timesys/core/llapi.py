@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Timesys Corporation
+# SPDX-FileCopyrightText: 2023 Timesys Corporation
 # SPDX-License-Identifier: MIT
 import base64
 from collections.abc import Sequence
