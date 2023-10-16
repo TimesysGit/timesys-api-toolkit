@@ -46,7 +46,7 @@ def get_manifests():
     return timesys.llapi.GET(resource, data_dict=data)
 
 
-def get_manifest_info(manifest_token, sbom_format=None, file_format=None):
+def get_manifest_info(manifest_token, sbom_format=None, file_format=None, sbom_version=None):
     """Get manifest data along with metadata
 
     Parameters
@@ -83,15 +83,16 @@ def get_manifest_info(manifest_token, sbom_format=None, file_format=None):
     data = {}
     if sbom_format is not None:
         data["sbom_format"] = sbom_format
-
     if file_format:
         data["file_format"] = file_format
+    if sbom_version:
+        data["sbom_version"] = sbom_version
 
     resource = f"/api/v1/vigiles/manifests/{manifest_token}"
     return timesys.llapi.GET(resource, data_dict=data)
 
 
-def get_manifest_file(manifest_token, sbom_format=None, file_format=None):
+def get_manifest_file(manifest_token, sbom_format=None, file_format=None, sbom_version=None):
     """Get manifest data as a file
 
     Response does not include other metadata such as product/folder tokens.
@@ -119,6 +120,8 @@ def get_manifest_file(manifest_token, sbom_format=None, file_format=None):
         data["sbom_format"] = sbom_format
     if file_format:
         data["file_format"] = file_format
+    if sbom_version:
+        data["sbom_version"] = sbom_version
     return timesys.llapi.GET(resource, data_dict=data, json=False)
 
 

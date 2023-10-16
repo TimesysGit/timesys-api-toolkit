@@ -112,12 +112,14 @@ def process_args(argv=None):
     parser_get_manifest_info.add_argument("manifest_token", metavar="manifest-token", help="Token of the Manifest to retrieve")
     parser_get_manifest_info.add_argument("-f", "--sbom-format", dest="sbom_format", help="Convert the manifest to another format before returning it", choices=["spdx", "spdx-lite", "cyclonedx"])
     parser_get_manifest_info.add_argument("-i", "--file-format", dest="file_format", help="Specify file format type for SPDX and CycloneDX SBOMs")
+    parser_get_manifest_info.add_argument("-v", "--sbom-version", dest="sbom_version", help="Specify file SBOM version for SPDX and CycloneDX SBOMs")
 
     # manifest get file (just bytes)
     parser_get_manifest_file = subparser_manifest.add_parser("download", help="Get manifest data in bytes to write to a file")
     parser_get_manifest_file.add_argument("manifest_token", metavar="manifest-token", help="Token of the Manifest to retrieve")
     parser_get_manifest_file.add_argument("-f", "--sbom-format", dest="sbom_format", help="Convert the manifest to another format before returning it", choices=["spdx", "spdx-lite", "cyclonedx"])
     parser_get_manifest_file.add_argument("-i", "--file-format", dest="file_format", help="Specify file format type for SPDX and CycloneDX SBOMs")
+    parser_get_manifest_file.add_argument("-v", "--sbom-version", dest="sbom_version", help="Specify file SBOM version for SPDX and CycloneDX SBOMs")
     manifest_download_group = parser_get_manifest_file.add_mutually_exclusive_group(required=True)
     manifest_download_group.add_argument("-o", "--outfile", dest="outfile", help="Path to output file. Existing files will be overwritten!")
     manifest_download_group.add_argument("--stdout", dest="stdout", action="store_true", help="Write downloaded bytes to stdout")
@@ -305,12 +307,14 @@ if __name__ == '__main__':
                     parsed_args.manifest_token,
                     parsed_args.sbom_format,
                     parsed_args.file_format,
+                    parsed_args.sbom_version,
                 )
             elif manifest_command == "download":
                 result = vigiles.manifests.get_manifest_file(
                     parsed_args.manifest_token,
                     parsed_args.sbom_format,
                     parsed_args.file_format,
+                    parsed_args.sbom_version,
                 )
 
                 if not result.endswith(b'\n'):
