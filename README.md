@@ -1,3 +1,5 @@
+# NOTE: This project is now maintained [here](https://github.com/TimesysGit/vigiles-cli)
+
 # Timesys LinuxLink API Toolkit
 
 This project contains a Python package and a command-line tool for
